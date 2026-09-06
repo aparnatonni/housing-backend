@@ -30,6 +30,7 @@ async function main() {
     prisma.roommatePreference.deleteMany(),
     prisma.room.deleteMany(),
     prisma.property.deleteMany(),
+    prisma.refreshToken.deleteMany(),
     prisma.user.deleteMany(),
   ]);
 
@@ -255,6 +256,10 @@ async function main() {
   console.log("Seeded: 1 admin, 2 owners, 3 tenants, 3 properties with 6 rooms");
   console.log(`Total properties: ${await prisma.property.count()}`);
   console.log(`Total rooms: ${await prisma.room.count()}`);
+  console.log("---------------------------------------------------");
+  console.log("Demo ADMIN login (seed-created, not via registration):");
+  console.log("  email:    admin@housing.com");
+  console.log("  password: Password123!");
 }
 
 main()

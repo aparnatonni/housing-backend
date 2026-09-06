@@ -24,6 +24,15 @@ const config = {
     windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000),
     max: Number(process.env.RATE_LIMIT_MAX ?? 100),
   },
+  jwt: {
+    accessSecret: process.env.JWT_ACCESS_SECRET ?? "",
+    refreshSecret: process.env.JWT_REFRESH_SECRET ?? "",
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? "15m",
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? "7d",
+  },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  },
   isProduction: parseBoolean(process.env.IS_PRODUCTION),
 };
 

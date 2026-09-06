@@ -139,13 +139,14 @@ model User {
   updatedAt    DateTime     @updatedAt @map("updated_at")
   deletedAt    DateTime?    @map("deleted_at")
 
-  roommatePreference   RoommatePreference?
+roommatePreference   RoommatePreference?
   properties           Property[]
-  viewingRequests      ViewingRequest[]     @relation("tenantViewingRequests")
-  applications         Application[]        @relation("tenantApplications")
-  tenancies            Tenancy[]            @relation("tenantTenancies")
-  maintenanceRequests  MaintenanceRequest[] @relation("tenantMaintenanceRequests")
+  viewingRequests      ViewingRequest[]       @relation("tenantViewingRequests")
+  applications         Application[]          @relation("tenantApplications")
+  tenancies            Tenancy[]              @relation("tenantTenancies")
+  maintenanceRequests  MaintenanceRequest[]   @relation("tenantMaintenanceRequests")
   billSplitTenantShare BillSplitTenant[]
+  refreshTokens        RefreshToken[]
   payments             Payment[]
   auditLogs            AuditLog[]
   notifications        Notification[]
@@ -411,7 +412,7 @@ model AuditLog {
 }
 
 model Notification {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   userId    String    @map("user_id")
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String
@@ -424,4 +425,20 @@ model Notification {
   @@index([userId, createdAt])
   @@index([isRead])
   @@map("notifications")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }
