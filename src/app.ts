@@ -7,6 +7,8 @@ import config from "./config";
 import { errorHandler, notFoundHandler } from "./middlewares";
 import authRouter from "./modules/auth/auth.routes";
 import healthRouter from "./modules/health/health.routes";
+import propertiesRouter from "./modules/properties/properties.routes";
+import roomsRouter from "./modules/rooms/rooms.routes";
 import adminUsersRouter from "./modules/users/users.admin.routes";
 import usersRouter from "./modules/users/users.routes";
 
@@ -37,6 +39,8 @@ apiRouter.use(healthRouter);
 apiRouter.use(authRouter);
 apiRouter.use("/users", usersRouter);
 apiRouter.use("/admin/users", adminUsersRouter);
+apiRouter.use("/properties", propertiesRouter);
+apiRouter.use("/rooms", roomsRouter);
 
 app.use("/api/v1", apiRouter);
 

@@ -9,6 +9,7 @@ Housing & Roommate Management Platform — backend API built with Express 5, Typ
 - Prisma ORM + PostgreSQL (Neon)
 - JWT auth (short-lived access + rotating refresh tokens), bcrypt password hashing
 - Google OAuth sign-in via `google-auth-library`
+- Cloudinary image uploads via Multer
 - Zod request validation
 - Biome for linting/formatting
 - Helmet, CORS, express-rate-limit
@@ -37,6 +38,9 @@ Server runs on `http://localhost:5000` (PORT from `.env`). All endpoints under `
 | `JWT_ACCESS_EXPIRES_IN` | Access token lifetime (e.g. `15m`)                             | `15m`   |
 | `JWT_REFRESH_EXPIRES_IN`| Refresh token lifetime (e.g. `7d`)                             | `7d`    |
 | `GOOGLE_CLIENT_ID`      | Google OAuth 2.0 web client ID (for `/auth/google`)            | —       |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name (for property image uploads)             | —       |
+| `CLOUDINARY_API_KEY`    | Cloudinary API key                                             | —       |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret                                          | —       |
 | `CORS_ORIGIN`           | Allowed CORS origin                                            | `*`     |
 | `RATE_LIMIT_WINDOW_MS`  | Rate-limit window                                              | 15 min  |
 | `RATE_LIMIT_MAX`        | Max requests per window                                        | `100`   |
@@ -97,6 +101,40 @@ curl -s http://localhost:5000/api/v1/auth/me \
 5. Set `GOOGLE_CLIENT_ID=<your-client-id>` in `.env` and restart the server.
 
 The backend only needs the Client ID because it validates ID tokens using Google's public JWKS — no API key or client secret round-trip is required.
+
+## Properties & Rooms endpoints
+
+Owners manage their own listings; tenants and the public can browse. All mutation routes require `protect` + `authorize("OWNER")`, and ownership is enforced per-row (403 for non-owners, 404 for missing/soft-deleted resources).
+
+| Method | Path                          | Auth                    | Description                                   |
+| ------ | ----------------------------- | ----------------------- | --------------------------------------------- |
+| GET    | `/properties`                 | public                  | Paginated list with filters (see below)       |
+| GET    | `/properties/:id`             | public                  | Property details including its rooms + owner  |
+| POST   | `/properties`                 | `OWNER`                 | Create a property                             |
+| PATCH  | `/properties/:id`             | `OWNER` (owner)         | Update own property                           |
+| DELETE | `/properties/:id`             | `OWNER` (owner)         | Soft-delete own property                      |
+| GET    | `/properties/my-properties`   | `OWNER`                 | Paginated list of the owner's own listings    |
+| POST   | `/properties/:id/rooms`       | `OWNER` (owner)         | Add a room to own property                    |
+| POST   | `/properties/:id/images`      | `OWNER` (owner)         | Upload images (Multer + Cloudinary)           |
+| PATCH  | `/rooms/:id`                  | `OWNER` (owner)         | Update a room of own property                 |
+| DELETE | `/rooms/:id`                  | `OWNER` (owner)         | Soft-delete a room                            |
+
+### List filters (`GET /properties`)
+
+- `page`, `limit` — pagination (default `1`, `20`; limit max 100)
+- `city` — case-insensitive city match
+- `minRent`, `maxRent` — properties that have at least one non-deleted room with `rentAmount` in range
+- `propertyType` — `APARTMENT` / `HOUSE` / `STUDIO` / `CONDO` / `TOWNHOUSE`
+- `search` — case-insensitive match on `title` or `address`
+- `sortBy` — `newest` (default), `oldest`, `price_asc`, `price_desc`
+
+List items include `roomCount` and `minRent` (cheapest non-deleted room) instead of the full `rooms[]`. Price sorting is computed server-side from `minRent`.
+
+Soft-deleted properties/rooms and `INACTIVE` properties are never returned by public endpoints. `DELETE` removes listings permanently from view (soft delete via `deletedAt`).
+
+### Image upload
+
+`POST /properties/:id/images` accepts multipart form data with field `images` (up to 10 files, each ≤ 5MB, image/* only). Files are uploaded to Cloudinary and their secure URLs are appended to the property's `images` array. Set `CLOUDINARY_*` env vars; the endpoint returns `503` if not configured.
 
 ## Commands
 
