@@ -8,5 +8,6 @@ export type AuthUser = {
   phone: string | null;
   avatarUrl: string | null;
   isVerified: boolean;
+  isSuspended: boolean;
   provider: "LOCAL" | "GOOGLE";
 };

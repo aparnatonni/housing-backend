@@ -133,6 +133,7 @@ model User {
   bio          String?
   dateOfBirth  DateTime?    @map("date_of_birth")
   isVerified   Boolean      @default(false) @map("is_verified")
+  isSuspended  Boolean      @default(false) @map("is_suspended")
   provider     AuthProvider @default(LOCAL)
   googleId     String?      @unique @map("google_id")
   createdAt    DateTime     @default(now()) @map("created_at")

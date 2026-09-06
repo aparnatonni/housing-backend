@@ -26,6 +26,7 @@ export const serializeUser = (user: User): AuthUser => ({
   phone: user.phone,
   avatarUrl: user.avatarUrl,
   isVerified: user.isVerified,
+  isSuspended: user.isSuspended,
   provider: user.provider,
 });
 
@@ -90,6 +91,12 @@ export const loginUser = async (input: LoginInput) => {
   if (!user || user.deletedAt !== null || user.passwordHash === null) {
     throw new AppError("Invalid email or password", 401);
   }
+  if (user.isSuspended) {
+    throw new AppError(
+      "Your account has been suspended. Contact support.",
+      403,
+    );
+  }
 
   const passwordMatches = await bcrypt.compare(
     input.password,
@@ -130,6 +137,16 @@ export const refreshUserSession = async (refreshToken: string) => {
   const user = await prisma.user.findUnique({ where: { id: stored.userId } });
   if (!user || user.deletedAt !== null) {
     throw new AppError("Invalid or expired refresh token", 401);
+  }
+  if (user.isSuspended) {
+    await prisma.refreshToken.update({
+      where: { id: stored.id },
+      data: { revokedAt: new Date() },
+    });
+    throw new AppError(
+      "Your account has been suspended. Contact support.",
+      403,
+    );
   }
 
   await prisma.refreshToken.update({
@@ -175,6 +192,12 @@ export const googleLoginUser = async (idToken: string) => {
   let user = await prisma.user.findUnique({ where: { email } });
   if (user && user.deletedAt !== null) {
     throw new AppError("This account has been deactivated", 401);
+  }
+  if (user?.isSuspended) {
+    throw new AppError(
+      "Your account has been suspended. Contact support.",
+      403,
+    );
   }
 
   if (!user) {

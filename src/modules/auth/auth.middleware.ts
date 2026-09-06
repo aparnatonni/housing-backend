@@ -42,6 +42,7 @@ export const protect = async (
         phone: true,
         avatarUrl: true,
         isVerified: true,
+        isSuspended: true,
         provider: true,
         deletedAt: true,
       },
@@ -49,6 +50,12 @@ export const protect = async (
 
     if (!user || user.deletedAt !== null) {
       throw new Error("user not found");
+    }
+    if (user.isSuspended) {
+      throw new AppError(
+        "Your account has been suspended. Contact support.",
+        403,
+      );
     }
 
     const { deletedAt: _deletedAt, ...safeUser } = user;

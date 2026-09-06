@@ -7,6 +7,8 @@ import config from "./config";
 import { errorHandler, notFoundHandler } from "./middlewares";
 import authRouter from "./modules/auth/auth.routes";
 import healthRouter from "./modules/health/health.routes";
+import adminUsersRouter from "./modules/users/users.admin.routes";
+import usersRouter from "./modules/users/users.routes";
 
 const app: Express = express();
 
@@ -33,6 +35,8 @@ app.use(
 const apiRouter = express.Router();
 apiRouter.use(healthRouter);
 apiRouter.use(authRouter);
+apiRouter.use("/users", usersRouter);
+apiRouter.use("/admin/users", adminUsersRouter);
 
 app.use("/api/v1", apiRouter);
 
