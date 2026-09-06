@@ -1,0 +1,427 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  TENANT
+  OWNER
+  ADMIN
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  STUDIO
+  CONDO
+  TOWNHOUSE
+}
+
+enum PropertyStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RoomType {
+  SINGLE
+  DOUBLE
+  TRIPLE
+  QUAD
+  MASTER
+  STUDIO
+}
+
+enum ViewingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum TenancyStatus {
+  ACTIVE
+  ENDED
+}
+
+enum RentPaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  FAILED
+}
+
+enum BillType {
+  ELECTRICITY
+  WATER
+  GAS
+  INTERNET
+  OTHER
+}
+
+enum BillStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum MaintenanceStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum PaymentGateway {
+  STRIPE
+  RAZORPAY
+  PAYPAL
+  CASH
+  OTHER
+}
+
+enum PaymentPurpose {
+  RENT
+  BILL
+  DEPOSIT
+  OTHER
+}
+
+enum GenderPreference {
+  MALE
+  FEMALE
+  ANY
+}
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String?      @map("password_hash")
+  role         Role         @default(TENANT)
+  name         String
+  phone        String?
+  avatarUrl    String?      @map("avatar_url")
+  bio          String?
+  dateOfBirth  DateTime?    @map("date_of_birth")
+  isVerified   Boolean      @default(false) @map("is_verified")
+  provider     AuthProvider @default(LOCAL)
+  googleId     String?      @unique @map("google_id")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  deletedAt    DateTime?    @map("deleted_at")
+
+  roommatePreference   RoommatePreference?
+  properties           Property[]
+  viewingRequests      ViewingRequest[]     @relation("tenantViewingRequests")
+  applications         Application[]        @relation("tenantApplications")
+  tenancies            Tenancy[]            @relation("tenantTenancies")
+  maintenanceRequests  MaintenanceRequest[] @relation("tenantMaintenanceRequests")
+  billSplitTenantShare BillSplitTenant[]
+  payments             Payment[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+
+  @@index([role, deletedAt])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Property {
+  id           String         @id @default(uuid())
+  ownerId      String         @map("owner_id")
+  owner        User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  address      String
+  city         String
+  area         String?
+  state        String?
+  zipCode      String?        @map("zip_code")
+  propertyType PropertyType   @default(APARTMENT) @map("property_type")
+  amenities    String[]
+  images       String[]
+  status       PropertyStatus @default(ACTIVE)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  deletedAt    DateTime?      @map("deleted_at")
+
+  rooms Room[]
+
+  @@index([ownerId, deletedAt])
+  @@index([city, status, deletedAt])
+  @@index([area])
+  @@index([status, createdAt])
+  @@index([deletedAt])
+  @@map("properties")
+}
+
+model Room {
+  id          String    @id @default(uuid())
+  propertyId  String    @map("property_id")
+  property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomType    RoomType  @default(SINGLE) @map("room_type")
+  rentAmount  Float     @map("rent_amount")
+  isAvailable Boolean   @default(true) @map("is_available")
+  capacity    Int
+  images      String[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  viewingRequests     ViewingRequest[]
+  applications        Application[]
+  tenancies           Tenancy[]
+  maintenanceRequests MaintenanceRequest[]
+
+  @@index([propertyId, deletedAt])
+  @@index([isAvailable, deletedAt])
+  @@index([roomType, rentAmount])
+  @@index([deletedAt])
+  @@map("rooms")
+}
+
+model RoommatePreference {
+  id               String           @id @default(uuid())
+  userId           String           @unique @map("user_id")
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  minBudget        Float?           @map("min_budget")
+  maxBudget        Float?           @map("max_budget")
+  preferredCity    String?          @map("preferred_city")
+  preferredArea    String?          @map("preferred_area")
+  genderPreference GenderPreference @default(ANY) @map("gender_preference")
+  lifestyleTags    String[]         @map("lifestyle_tags")
+  isSmoker         Boolean?         @map("is_smoker")
+  hasPets          Boolean?         @map("has_pets")
+  moveInDate       DateTime?        @map("move_in_date")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  @@index([preferredCity])
+  @@index([genderPreference])
+  @@map("roommate_preferences")
+}
+
+model ViewingRequest {
+  id            String        @id @default(uuid())
+  tenantId      String        @map("tenant_id")
+  tenant        User          @relation("tenantViewingRequests", fields: [tenantId], references: [id], onDelete: Cascade)
+  roomId        String        @map("room_id")
+  room          Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  requestedDate DateTime      @map("requested_date")
+  notes         String?
+  status        ViewingStatus @default(PENDING)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@index([tenantId, status])
+  @@index([roomId, status])
+  @@index([status])
+  @@index([requestedDate])
+  @@map("viewing_requests")
+}
+
+model Application {
+  id         String            @id @default(uuid())
+  tenantId   String            @map("tenant_id")
+  tenant     User              @relation("tenantApplications", fields: [tenantId], references: [id], onDelete: Cascade)
+  roomId     String            @map("room_id")
+  room       Room              @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  status     ApplicationStatus @default(PENDING)
+  moveInDate DateTime?         @map("move_in_date")
+  note       String?
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @updatedAt @map("updated_at")
+
+  tenancy Tenancy?
+
+  @@index([tenantId, status])
+  @@index([roomId, status])
+  @@index([status])
+  @@index([createdAt])
+  @@map("applications")
+}
+
+model Tenancy {
+  id            String        @id @default(uuid())
+  applicationId String        @unique @map("application_id")
+  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  tenantId      String        @map("tenant_id")
+  tenant        User          @relation("tenantTenancies", fields: [tenantId], references: [id], onDelete: Cascade)
+  roomId        String        @map("room_id")
+  room          Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  startDate     DateTime      @map("start_date")
+  endDate       DateTime?     @map("end_date")
+  rentAmount    Float         @map("rent_amount")
+  status        TenancyStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  rentPayments        RentPayment[]
+  billSplits          BillSplit[]
+  maintenanceRequests MaintenanceRequest[]
+
+  @@index([tenantId, status])
+  @@index([roomId, status])
+  @@index([status])
+  @@index([createdAt])
+  @@map("tenancies")
+}
+
+model RentPayment {
+  id        String            @id @default(uuid())
+  tenancyId String            @map("tenancy_id")
+  tenancy   Tenancy           @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+  amount    Float
+  dueDate   DateTime          @map("due_date")
+  paidAt    DateTime?         @map("paid_at")
+  status    RentPaymentStatus @default(PENDING)
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  @@index([tenancyId, status])
+  @@index([tenancyId, dueDate])
+  @@index([status])
+  @@index([dueDate])
+  @@map("rent_payments")
+}
+
+model BillSplit {
+  id          String     @id @default(uuid())
+  tenancyId   String     @map("tenancy_id")
+  tenancy     Tenancy    @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+  billType    BillType   @map("bill_type")
+  totalAmount Float      @map("total_amount")
+  dueDate     DateTime?  @map("due_date")
+  paidAt      DateTime?  @map("paid_at")
+  status      BillStatus @default(PENDING)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  shares BillSplitTenant[]
+
+  @@index([tenancyId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("bill_splits")
+}
+
+model BillSplitTenant {
+  id          String    @id @default(uuid())
+  billSplitId String    @map("bill_split_id")
+  billSplit   BillSplit @relation(fields: [billSplitId], references: [id], onDelete: Cascade)
+  tenantId    String    @map("tenant_id")
+  tenant      User      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shareAmount Float     @map("share_amount")
+  isPaid      Boolean   @default(false) @map("is_paid")
+  paidAt      DateTime? @map("paid_at")
+
+  @@index([billSplitId])
+  @@index([tenantId, isPaid])
+  @@index([tenantId])
+  @@map("bill_split_tenants")
+}
+
+model MaintenanceRequest {
+  id          String              @id @default(uuid())
+  tenancyId   String?             @map("tenancy_id")
+  tenancy     Tenancy?            @relation(fields: [tenancyId], references: [id], onDelete: SetNull)
+  roomId      String?             @map("room_id")
+  room        Room?               @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  tenantId    String              @map("tenant_id")
+  tenant      User                @relation("tenantMaintenanceRequests", fields: [tenantId], references: [id], onDelete: Cascade)
+  category    String
+  description String?
+  images      String[]
+  status      MaintenanceStatus   @default(OPEN)
+  priority    MaintenancePriority @default(MEDIUM)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  resolvedAt  DateTime?           @map("resolved_at")
+
+  @@index([tenantId, status])
+  @@index([roomId, status])
+  @@index([status, priority])
+  @@map("maintenance_requests")
+}
+
+model Payment {
+  id                   String         @id @default(uuid())
+  userId               String         @map("user_id")
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount               Float
+  currency             String         @default("USD")
+  purpose              PaymentPurpose @default(RENT)
+  gateway              PaymentGateway @default(STRIPE)
+  gatewayTransactionId String?        @unique @map("gateway_transaction_id")
+  status               PaymentStatus  @default(PENDING)
+  metadata             Json?
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@index([purpose])
+  @@index([status])
+  @@map("payments")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([entityType, createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  message   String
+  isRead    Boolean   @default(false) @map("is_read")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@index([isRead])
+  @@map("notifications")
+}
