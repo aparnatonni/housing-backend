@@ -38,6 +38,16 @@ const config = {
     apiKey: process.env.CLOUDINARY_API_KEY ?? "",
     apiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
   },
+  smtp: {
+    host: process.env.SMTP_HOST ?? "",
+    port: Number(process.env.SMTP_PORT ?? 587),
+    user: process.env.SMTP_USER ?? "",
+    password: process.env.SMTP_PASSWORD ?? "",
+    from: process.env.SMTP_FROM ?? "",
+  },
+  redis: {
+    url: process.env.REDIS_URL ?? "",
+  },
   sslcommerz: {
     storeId: process.env.SSLCOMMERZ_STORE_ID ?? "",
     storePassword: process.env.SSLCOMMERZ_STORE_PASSWORD ?? "",

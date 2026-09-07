@@ -1,5 +1,6 @@
 import type { Prisma, Role } from "@prisma/client";
 import { AppError } from "../../errors";
+import { sendMailToUser } from "../../lib/mailer";
 import prisma from "../../lib/prisma";
 import type { CreateBillSplitInput } from "./bill-splits.validation";
 
@@ -253,6 +254,14 @@ export const createBillSplit = async (
     },
     { timeout: 30_000 },
   );
+
+  for (const share of shares) {
+    await sendMailToUser(
+      share.tenantId,
+      "New bill split",
+      `A ${input.billType} bill of $${input.totalAmount.toFixed(2)} has been split. Your share is $${share.amount.toFixed(2)}.`,
+    );
+  }
 
   return bill;
 };

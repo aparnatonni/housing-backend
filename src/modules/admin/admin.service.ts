@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { AppError } from "../../errors";
+import { invalidatePropertyLists } from "../../lib/cache";
 import prisma from "../../lib/prisma";
 import type {
   ListAuditLogsQuery,
@@ -180,7 +181,7 @@ export const updatePropertyStatus = async (
     throw new AppError("Property not found", 404);
   }
 
-  return prisma.property.update({
+  const updated = await prisma.property.update({
     where: { id: propertyId },
     data: { status },
     select: {
@@ -199,6 +200,8 @@ export const updatePropertyStatus = async (
       owner: { select: { id: true, name: true, email: true } },
     },
   });
+  await invalidatePropertyLists();
+  return updated;
 };
 
 export const listAllPayments = async (input: ListPaymentsAdminQuery) => {

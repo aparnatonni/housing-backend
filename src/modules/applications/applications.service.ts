@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { AppError } from "../../errors";
+import { sendMailToUser } from "../../lib/mailer";
 import prisma from "../../lib/prisma";
 import { getBrowsableRoom } from "../rooms/rooms.service";
 import type {
@@ -182,7 +183,7 @@ export const approveApplication = async (
 
   const { tenantId, roomId, moveInDate } = application;
 
-  return prisma.$transaction(
+  const approved = await prisma.$transaction(
     async (tx) => {
       const claim = await tx.application.updateMany({
         where: { id: applicationId, status: "PENDING" },
@@ -236,6 +237,14 @@ export const approveApplication = async (
     },
     { timeout: 30_000 },
   );
+
+  await sendMailToUser(
+    tenantId,
+    "Your housing application has been approved",
+    "Your housing application has been approved. Welcome aboard!",
+  );
+
+  return approved;
 };
 
 export const rejectApplication = async (
@@ -249,7 +258,7 @@ export const rejectApplication = async (
 
   const { tenantId, roomId } = application;
 
-  return prisma.$transaction(
+  const rejected = await prisma.$transaction(
     async (tx) => {
       const claim = await tx.application.updateMany({
         where: { id: applicationId, status: "PENDING" },
@@ -279,4 +288,12 @@ export const rejectApplication = async (
     },
     { timeout: 30_000 },
   );
+
+  await sendMailToUser(
+    tenantId,
+    "Your housing application has been rejected",
+    "Your housing application has been rejected.",
+  );
+
+  return rejected;
 };

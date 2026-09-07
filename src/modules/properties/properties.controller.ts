@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { AppError } from "../../errors";
+import { cacheGet, cacheSet, propertiesListKey } from "../../lib/cache";
 import { sendSuccess } from "../../utils";
 import { uploadImage } from "../../utils/cloudinary";
 import { validateBody } from "../../utils/validate";
@@ -43,7 +44,20 @@ export const create = async (req: Request, res: Response): Promise<void> => {
 
 export const list = async (req: Request, res: Response): Promise<void> => {
   const query = validateBody(listPropertiesQuerySchema, req.query ?? {});
+  const cacheKey = propertiesListKey(query);
+  const cached =
+    await cacheGet<Awaited<ReturnType<typeof listProperties>>>(cacheKey);
+  if (cached.hit && cached.value) {
+    res.setHeader("X-Cache", "HIT");
+    sendSuccess(res, {
+      message: "Properties fetched successfully",
+      data: cached.value,
+    });
+    return;
+  }
   const result = await listProperties(query);
+  await cacheSet(cacheKey, result);
+  res.setHeader("X-Cache", "MISS");
   sendSuccess(res, {
     message: "Properties fetched successfully",
     data: result,

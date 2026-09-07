@@ -1,5 +1,6 @@
 import type { Prisma, Role } from "@prisma/client";
 import { AppError } from "../../errors";
+import { sendMailToUser } from "../../lib/mailer";
 import prisma from "../../lib/prisma";
 import type { GenerateRentPaymentInput } from "./rent-payments.validation";
 
@@ -185,6 +186,12 @@ export const generateRentPayment = async (
       message: `Rent of $${tenancy.rentAmount.toFixed(2)} is due on ${dueDate.toISOString().slice(0, 10)}.`,
     },
   });
+
+  await sendMailToUser(
+    tenancy.tenantId,
+    "Rent payment due",
+    `Rent of $${tenancy.rentAmount.toFixed(2)} is due on ${dueDate.toISOString().slice(0, 10)}.`,
+  );
 
   return payment;
 };

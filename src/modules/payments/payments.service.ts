@@ -1,6 +1,7 @@
 import type { Prisma, Role } from "@prisma/client";
 import config from "../../config";
 import { AppError } from "../../errors";
+import { sendMailToUser } from "../../lib/mailer";
 import prisma from "../../lib/prisma";
 import type { InitiatePaymentInput } from "./payments.validation";
 import {
@@ -371,8 +372,9 @@ export const finalizePaymentAfterVerification = async (
   tranId: string,
   verification: { valId: string; validate: SslcommerzValidation },
 ) => {
-  return prisma.$transaction(
+  const { payment, shouldEmail } = await prisma.$transaction(
     async (tx) => {
+      let shouldEmail = false;
       const payment = await tx.payment.findUnique({
         where: { id: tranId },
         select: paymentSelect,
@@ -381,7 +383,7 @@ export const finalizePaymentAfterVerification = async (
         throw new AppError("Payment not found", 404);
       }
       if (payment.status === "SUCCESS") {
-        return payment;
+        return { payment, shouldEmail };
       }
 
       const reportedAmount = Number(verification.validate.amount);
@@ -419,10 +421,11 @@ export const finalizePaymentAfterVerification = async (
           select: paymentSelect,
         });
         if (current?.status === "SUCCESS") {
-          return current;
+          return { payment: current, shouldEmail };
         }
         throw new AppError("Payment cannot be processed", 409);
       }
+      shouldEmail = true;
 
       if (payment.purpose === "RENT") {
         const rentPayment = await tx.rentPayment.findFirst({
@@ -510,13 +513,29 @@ export const finalizePaymentAfterVerification = async (
         }
       }
 
-      return tx.payment.findUniqueOrThrow({
-        where: { id: tranId },
-        select: paymentSelect,
-      });
+      return {
+        payment: await tx.payment.findUniqueOrThrow({
+          where: { id: tranId },
+          select: paymentSelect,
+        }),
+        shouldEmail,
+      };
     },
     { timeout: 30_000 },
   );
+
+  if (shouldEmail) {
+    const amount = payment.amount.toFixed(2);
+    await sendMailToUser(
+      payment.userId,
+      "Payment successful",
+      payment.purpose === "RENT"
+        ? `Your rent payment of $${amount} was successful.`
+        : `Your bill payment of $${amount} was successful.`,
+    );
+  }
+
+  return payment;
 };
 
 export const failPayment = async (

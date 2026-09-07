@@ -1,5 +1,6 @@
 import type { MaintenanceStatus, Prisma } from "@prisma/client";
 import { AppError } from "../../errors";
+import { sendMailToUser } from "../../lib/mailer";
 import prisma from "../../lib/prisma";
 import type {
   CreateMaintenanceRequestInput,
@@ -195,7 +196,7 @@ export const updateMaintenanceStatus = async (
   const target = input.status;
   assertValidTransition(request.status, target);
 
-  return prisma.$transaction(
+  const updated = await prisma.$transaction(
     async (tx) => {
       const claim = await tx.maintenanceRequest.updateMany({
         where: { id: request.id, status: request.status },
@@ -230,6 +231,14 @@ export const updateMaintenanceStatus = async (
     },
     { timeout: 30_000 },
   );
+
+  await sendMailToUser(
+    request.tenantId,
+    "Maintenance request status updated",
+    `Your maintenance request (${request.category}) is now ${target}.`,
+  );
+
+  return updated;
 };
 
 export const addImagesToMaintenanceRequest = async (

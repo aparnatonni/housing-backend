@@ -1,5 +1,6 @@
 import type { Prisma, Property } from "@prisma/client";
 import { AppError } from "../../errors";
+import { invalidatePropertyLists } from "../../lib/cache";
 import prisma from "../../lib/prisma";
 import type {
   CreatePropertyInput,
@@ -139,6 +140,7 @@ export const createProperty = async (
     },
     select: propertySelect,
   });
+  await invalidatePropertyLists();
   return property;
 };
 
@@ -296,6 +298,7 @@ export const updateProperty = async (
     data,
     select: propertySelect,
   });
+  await invalidatePropertyLists();
   return property;
 };
 
@@ -308,6 +311,7 @@ export const softDeleteProperty = async (
     where: { id: propertyId },
     data: { deletedAt: new Date() },
   });
+  await invalidatePropertyLists();
   return propertyId;
 };
 
@@ -322,6 +326,7 @@ export const addImagesToProperty = async (
     data: { images: { push: imageUrls } },
     select: propertySelect,
   });
+  await invalidatePropertyLists();
   return property;
 };
 
@@ -339,6 +344,7 @@ export const createRoom = async (
     },
     select: roomSelect,
   });
+  await invalidatePropertyLists();
   return room;
 };
 
@@ -353,6 +359,7 @@ export const updateRoom = async (
     data: normalize(input),
     select: roomSelect,
   });
+  await invalidatePropertyLists();
   return room;
 };
 
@@ -365,5 +372,6 @@ export const softDeleteRoom = async (
     where: { id: roomId },
     data: { deletedAt: new Date() },
   });
+  await invalidatePropertyLists();
   return roomId;
 };

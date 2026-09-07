@@ -48,6 +48,12 @@ Server runs on `http://localhost:5000` (PORT from `.env`). All endpoints under `
 | `SSLCOMMERZ_FAIL_URL`   | Browser callback after a failed payment                        | `http://localhost:5000/api/v1/payments/fail` |
 | `SSLCOMMERZ_CANCEL_URL` | Browser callback after the user cancels                        | `http://localhost:5000/api/v1/payments/cancel` |
 | `SSLCOMMERZ_IPN_URL`    | Server-to-server IPN listener for async notifications          | `http://localhost:5000/api/v1/payments/webhook` |
+| `SMTP_HOST`             | SMTP host for sending notification emails                      | —       |
+| `SMTP_PORT`             | SMTP port                                                      | `587`   |
+| `SMTP_USER`             | SMTP username                                                  | —       |
+| `SMTP_PASSWORD`         | SMTP password / app password                                   | —       |
+| `SMTP_FROM`             | "From" address for outgoing emails                             | —       |
+| `REDIS_URL`             | Redis connection URL (e.g. Upstash `rediss://...`) for caching | —       |
 | `CORS_ORIGIN`           | Allowed CORS origin                                            | `*`     |
 | `RATE_LIMIT_WINDOW_MS`  | Rate-limit window                                              | 15 min  |
 | `RATE_LIMIT_MAX`        | Max requests per window                                        | `100`   |
@@ -238,6 +244,27 @@ Platform-wide operations restricted to `ADMIN` role. All routes require `protect
 - `userId` — uuid of the actor
 - `from` / `to` — ISO datetimes bounding `createdAt`
 - `page` / `limit` — pagination (default `1` / `20`, limit max 100)
+
+## Email notifications (SMTP)
+
+Transactional emails are sent alongside selected notification/audit events. Sending is **best-effort**: it runs in a `try/catch` after the DB transaction commits, so an SMTP failure never breaks the main request; results are logged via `[mailer]`.
+
+Events that send an email (to the affected user) when `SMTP_*` vars are configured:
+
+- Application **approved** / **rejected** → to the applicant
+- Maintenance request **status changed** → to the tenant
+- Payment **succeeded** (rent or bill split) → to the payer
+- Rent payment **generated/due** → to the tenant
+- Bill split **created** → to each participating tenant
+
+Implementation: `src/lib/mailer.ts` (nodemailer transport + `sendMailToUser`).
+
+## Redis caching
+
+The public `GET /api/v1/properties` listing is cached in Redis (key = canonicalized query params, TTL 60s). Responses include an `X-Cache: HIT | MISS` header. The cache is invalidated (`properties:*`) on any property/room/mutation and when an admin flips a property's active status — so public listings always reflect fresh data.
+
+- All cache operations degrade gracefully: if Redis is unreachable, requests fall back to a direct DB query with no error.
+- Implementation: `src/lib/cache.ts` (get/set/invalidate) + wiring in `src/modules/properties/*` and `src/modules/admin/admin.service.ts`.
 
 ## Commands
 
