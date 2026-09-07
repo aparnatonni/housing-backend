@@ -32,7 +32,7 @@ Server runs on `http://localhost:5000` (PORT from `.env`). All endpoints under `
 | ----------------------- | -------------------------------------------------------------- | ------- |
 | `PORT`                  | HTTP port                                                      | `5000`  |
 | `NODE_ENV`              | `development` / `production`                                   | dev     |
-| `DATABASE_URL`          | PostgreSQL connection string (Prisma)                          | —       |
+| `DATABASE_URL`          | PostgreSQL connection string (Prisma). Use the direct Neon host (no `-pooler`) so interactive transactions stay consistent. | —       |
 | `JWT_ACCESS_SECRET`     | Secret used to sign short-lived access tokens                  | —       |
 | `JWT_REFRESH_SECRET`    | Secret used to sign rotating refresh tokens                    | —       |
 | `JWT_ACCESS_EXPIRES_IN` | Access token lifetime (e.g. `15m`)                             | `15m`   |
@@ -135,6 +135,30 @@ Soft-deleted properties/rooms and `INACTIVE` properties are never returned by pu
 ### Image upload
 
 `POST /properties/:id/images` accepts multipart form data with field `images` (up to 10 files, each ≤ 5MB, image/* only). Files are uploaded to Cloudinary and their secure URLs are appended to the property's `images` array. Set `CLOUDINARY_*` env vars; the endpoint returns `503` if not configured.
+
+## Viewing requests, applications & tenancies
+
+Tenants request viewings and apply for rooms; owners review them and create tenancies. Every application status change writes an `audit_log` row and a `notification` to the tenant.
+
+| Method | Path                                | Auth            | Description                                                        |
+| ------ | ----------------------------------- | --------------- | ------------------------------------------------------------------ |
+| POST   | `/viewing-requests`                 | `TENANT`        | Request a viewing of a room (duplicate pending → 409)              |
+| GET    | `/viewing-requests/my-requests`     | `TENANT`        | List own viewing requests (filter `?status=`)                      |
+| GET    | `/viewing-requests/received`        | `OWNER`         | List viewings for own properties (filter `?status=`)               |
+| PATCH  | `/viewing-requests/:id/status`      | `OWNER` (owner) | `APPROVED` / `REJECTED` / `COMPLETED` / `CANCELLED` (owner can't view) |
+| POST   | `/applications`                     | `TENANT`        | Apply for a room (unavailable room or duplicate pending → 409)     |
+| GET    | `/applications/my-applications`     | `TENANT`        | List own applications (filter `?status=`)                          |
+| PATCH  | `/applications/:id/approve`         | `OWNER` (owner) | Approve — creates an ACTIVE tenancy atomically                     |
+| PATCH  | `/applications/:id/reject`          | `OWNER` (owner) | Reject the application                                             |
+| GET    | `/tenancies/my-tenancy`             | `TENANT`        | Current ACTIVE tenancy (404 if none)                               |
+| GET    | `/tenancies/:propertyId`            | `OWNER` (owner) | Tenancies of own property (403 if not the owner)                   |
+
+Workflow facts:
+
+- Viewing requests: `PENDING → APPROVED/REJECTED/CANCELLED`, `APPROVED → COMPLETED/CANCELLED`; reprocessing a non-pending request is a 409. `received`/`my-requests` support the `status` filter.
+- Applications: applying to an already-unavailable room or a second pending application for the same room → 409.
+- Approve is **race-safe**: the whole approve (claim the application, mark the room unavailable, auto-reject other pending applications for that room, create the ACTIVE tenancy, audit log + tenant notification) runs in a single interactive `$transaction` with a 30s timeout. Two concurrent approves of the same application yield exactly one 200 and one 409; a room made unavailable between apply and approve fails with 409 and leaves the application PENDING.
+- The interactive transaction must run on a real session connection — hence `DATABASE_URL` should be Neon's direct host, not the `-pooler` host.
 
 ## Commands
 

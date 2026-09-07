@@ -5,12 +5,15 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import config from "./config";
 import { errorHandler, notFoundHandler } from "./middlewares";
+import applicationsRouter from "./modules/applications/applications.routes";
 import authRouter from "./modules/auth/auth.routes";
 import healthRouter from "./modules/health/health.routes";
 import propertiesRouter from "./modules/properties/properties.routes";
 import roomsRouter from "./modules/rooms/rooms.routes";
+import tenanciesRouter from "./modules/tenancies/tenancies.routes";
 import adminUsersRouter from "./modules/users/users.admin.routes";
 import usersRouter from "./modules/users/users.routes";
+import viewingRequestsRouter from "./modules/viewing-requests/viewing-requests.routes";
 
 const app: Express = express();
 
@@ -41,6 +44,9 @@ apiRouter.use("/users", usersRouter);
 apiRouter.use("/admin/users", adminUsersRouter);
 apiRouter.use("/properties", propertiesRouter);
 apiRouter.use("/rooms", roomsRouter);
+apiRouter.use("/viewing-requests", viewingRequestsRouter);
+apiRouter.use("/applications", applicationsRouter);
+apiRouter.use("/tenancies", tenanciesRouter);
 
 app.use("/api/v1", apiRouter);
 
