@@ -59,9 +59,9 @@ export const sendMailToUser = async (
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true },
+      select: { email: true, deletedAt: true },
     });
-    if (!user) {
+    if (!user || user.deletedAt !== null) {
       return { ok: true, messageId: null, error: null };
     }
     return sendMail({ to: user.email, subject, text });

@@ -2,6 +2,77 @@
 
 Housing & Roommate Management Platform — backend API built with Express 5, TypeScript, Prisma (PostgreSQL), and Zod validation.
 
+## Overview
+
+A full-stack backend for a housing & roommate management platform. Property owners list properties and rooms, browse for applicants, approve applications (which atomically creates an active tenancy), manage maintenance requests, and generate rent payments. Tenants browse listings, request viewings, apply for rooms, split household bills with roommates, raise maintenance requests, and pay rent/bill shares through SSLCommerz. Admins get platform-wide dashboards, user management, and audit logs.
+
+Key capabilities:
+
+- JWT auth with rotating (revoked-on-use) refresh tokens, httpOnly refresh cookie, and Google OAuth sign-in
+- Public property/room discovery with multi-filter search, pagination, and price sorting
+- Race-safe application approval (single interactive transaction: claim → room unavailable → auto-reject competitors → create tenancy)
+- Rent payment generation, bill splitting across roommates, and SSLCommerz payment flows (initiate → hosted checkout → validated success/IPN callbacks)
+- Maintenance request lifecycle (OPEN → IN_PROGRESS → RESOLVED → CLOSED) with image uploads
+- Soft deletes (`deletedAt`) throughout; deleted/inactive resources are never served
+- Transactional email notifications (SMTP) sent best-effort after DB transactions commit
+- Redis caching for the public listing endpoint (60s TTL, `X-Cache` header, cache invalidation)
+- Audit logging and in-app notifications on every status change
+- Rate limiting, helmet, and CORS hardening
+
+## Architecture
+
+```
+Client (SPA / mobile / Postman)
+        │
+        ▼
+   Express 5 app (src/app.ts)
+   helmet · cors · express.json · cookie-parser · rate-limit
+        │
+        ▼
+   Routers (src/modules/*/*.routes.ts)  ──  mounted under /api/v1
+        │
+        ▼
+   middlewares: protect (JWT) → authorize (role) → requireUUID
+        │
+        ▼
+   Validators (Zod) ──▶ Controllers (src/modules/*/*.controller.ts)
+                             │
+                             ▼
+                      Services (src/modules/*/*.service.ts)
+                             │
+               ┌─────────────┼──────────────┐
+               ▼             ▼              ▼
+           PostgreSQL     Redis        SMTP / nodemailer
+           (Prisma ORM)   (cache)      (src/lib/mailer.ts)
+        └── Cloudinary (image uploads)
+```
+
+```
+src/
+├── app.ts                      # express app: middleware + router mounting
+├── server.ts                   # bootstrap & graceful shutdown
+├── config/index.ts             # env parsing + typed config
+├── constants/index.ts          # enums (roles, statuses, etc.)
+├── middlewares/                # errorHandler, protect, authorize, requireUUID, rateLimit
+├── utils/                      # ApiResponse helpers (sendSuccess/sendError), asyncHandler, token utils
+├── lib/                        # mailer.ts (SMTP), cache.ts (Redis)
+├── modules/
+│   ├── auth/          routes · controller · service · validation
+│   ├── users/         profile, roommatePreference, change password
+│   ├── properties/    properties + rooms (list incl. cache)
+│   ├── viewing-requests/
+│   ├── applications/
+│   ├── tenancies/
+│   ├── rent-payments/
+│   ├── bill-splits/
+│   ├── maintenance/
+│   ├── payments/      SSLCommerz parent
+│   └── admin/         dashboard, audit logs, user/property moderation
+└── prisma/                     # schema, migrations, seed
+```
+
+Request flow: **Route → (middlewares) → Zod validation → Controller → Service → DB/Redis/SMTP → standard JSON envelope**. Controllers stay thin; business logic and transactions live in services. All responses go through `utils` helpers, so every endpoint returns the same shape — success `{ success, message, data }` and error `{ success, message, errors }`.
+
 ## Stack
 
 - Node.js + TypeScript (strict mode)
@@ -25,6 +96,21 @@ npm run dev
 ```
 
 Server runs on `http://localhost:5000` (PORT from `.env`). All endpoints under `/api/v1`.
+
+### Demo accounts
+
+The seed creates six users (all password `Password123!`):
+
+| Role  | Email                  | Name           |
+| ----- | ---------------------- | -------------- |
+| ADMIN | `admin@housing.com`    | Platform Admin |
+| OWNER | `owner1@housing.com`   | Alice Owner    |
+| OWNER | `owner2@housing.com`   | Bob Landlord   |
+| TENANT| `tenant1@housing.com`  | Carol Tenant   |
+| TENANT| `tenant2@housing.com`  | Dave Renter    |
+| TENANT| `tenant3@housing.com`  | Eve Seeker     |
+
+The admin credentials are also printed by `npm run prisma:seed`.
 
 ## Environment variables
 
@@ -173,6 +259,37 @@ Workflow facts:
 - Approve is **race-safe**: the whole approve (claim the application, mark the room unavailable, auto-reject other pending applications for that room, create the ACTIVE tenancy, audit log + tenant notification) runs in a single interactive `$transaction` with a 30s timeout. Two concurrent approves of the same application yield exactly one 200 and one 409; a room made unavailable between apply and approve fails with 409 and leaves the application PENDING.
 - The interactive transaction must run on a real session connection — hence `DATABASE_URL` should be Neon's direct host, not the `-pooler` host.
 
+## Users endpoints
+
+Profile management for the authenticated user. `GET /users/:id` is a public minimal profile used for roommate matching.
+
+| Method | Path                       | Auth       | Description                                              |
+| ------ | -------------------------- | ---------- | -------------------------------------------------------- |
+| GET    | `/users/me`                | `protect`  | Full authenticated profile incl. `roommatePreference`    |
+| PATCH  | `/users/me`                | `protect`  | Update name/phone/avatar/bio and `roommatePreference`    |
+| PATCH  | `/users/change-password`   | `protect`  | Change password (`currentPassword` + `newPassword`)      |
+| GET    | `/users/:id`               | public     | Public minimal profile of another user                   |
+
+`roommatePreference` fields (all optional): `minBudget`, `maxBudget`, `preferredCity`, `preferredArea`, `genderPreference` (`ANY`/`MALE`/`FEMALE`), `lifestyleTags` (string[]), `isSmoker`, `hasPets`, `moveInDate`.
+
+## Rent payments, bill splits & maintenance
+
+| Method | Path                                              | Auth             | Description                                              |
+| ------ | ------------------------------------------------- | ---------------- | -------------------------------------------------------- |
+| GET    | `/tenancies/:tenancyId/rent-payments`             | member of tenancy| Rent payment history + upcoming dues                      |
+| POST   | `/tenancies/:tenancyId/rent-payments/generate`    | `OWNER` (owner)  | Generate the next rent payment (`dueDate` ISO). One per month — duplicate → 409 |
+| POST   | `/rent-payments/:id/mark-paid`                    | `OWNER` (owner)  | Manually mark a rent payment `PAID` (idempotent)         |
+| POST   | `/bill-splits`                                    | `OWNER`/`TENANT` | Split a bill across roommates (`ratio` OR `shares`, not both) |
+| GET    | `/bill-splits/tenancy/:tenancyId`                 | member of tenancy| Bill splits (+ tenant shares) for a tenancy               |
+| PATCH  | `/bill-splits/:id/settle-share`                   | `TENANT`         | Mark the caller's share `PAID`                           |
+| POST   | `/maintenance-requests`                           | `TENANT`         | Open a request for the room they rent (active tenancy required) |
+| GET    | `/maintenance-requests/my-requests`               | `TENANT`         | Own requests                                             |
+| GET    | `/maintenance-requests/property/:propertyId`      | `OWNER` (owner)  | Requests across the owner's property                     |
+| PATCH  | `/maintenance-requests/:id/status`                | `OWNER` (owner)  | Update status (validated chain: `OPEN → IN_PROGRESS → RESOLVED → CLOSED`) |
+| POST   | `/maintenance-requests/:id/images`                | `TENANT`/`OWNER` | Attach photos (Multer + Cloudinary)                      |
+
+Maintenance status lifecycle: `OPEN → IN_PROGRESS → RESOLVED → CLOSED` (any other transition is rejected with 409). Every status change writes an audit log + in-app notification and emails the tenant. Bill splits and generated rent payments also email the involved tenants.
+
 ## Payments (SSLCommerz)
 
 Tenants pay rent and bill splits through SSLCommerz. A `Payment` row records every gateway attempt and is linked to the target `RentPayment` or `BillSplit` so the happy path can flip the target to `PAID` atomically.
@@ -265,6 +382,13 @@ The public `GET /api/v1/properties` listing is cached in Redis (key = canonicali
 
 - All cache operations degrade gracefully: if Redis is unreachable, requests fall back to a direct DB query with no error.
 - Implementation: `src/lib/cache.ts` (get/set/invalidate) + wiring in `src/modules/properties/*` and `src/modules/admin/admin.service.ts`.
+
+## API documentation
+
+- **Postman collection** — every endpoint is covered in [`housing-backend.postman_collection.json`](./housing-backend.postman_collection.json) at the repo root. Import it into Postman, set the `baseUrl` collection variable (default `http://localhost:5000/api/v1`), and run **Auth → Login** first — the response script stores the access token in the `token` variable, which the collection's Bearer auth injects into every request. Id variables (`propertyId`, `roomId`, `tenancyId`, ...) are auto-set by their creating requests and reused by the follow-up calls.
+- Full interactive API docs (Swagger/OpenAPI) can be generated from the route definitions on request.
+
+Every response uses the standard envelope — success `{ success: true, message, data }`, error `{ success: false, message, errors }` — so client error handling can be uniform.
 
 ## Commands
 

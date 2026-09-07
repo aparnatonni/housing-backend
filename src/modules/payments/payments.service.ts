@@ -204,9 +204,9 @@ export const initiatePayment = async (
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { name: true, email: true, phone: true },
+    select: { name: true, email: true, phone: true, deletedAt: true },
   });
-  if (!user) {
+  if (!user || user.deletedAt !== null) {
     throw new AppError("User not found", 404);
   }
 

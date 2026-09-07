@@ -150,7 +150,13 @@ export const createMaintenanceRequest = async (
 
 export const listMyMaintenanceRequests = async (tenantId: string) =>
   prisma.maintenanceRequest.findMany({
-    where: { tenantId },
+    where: {
+      tenantId,
+      room: {
+        deletedAt: null,
+        property: { deletedAt: null },
+      },
+    },
     select: maintenanceRequestSelect,
     orderBy: { createdAt: "desc" },
   });
@@ -174,7 +180,7 @@ export const listPropertyMaintenanceRequests = async (
   }
 
   return prisma.maintenanceRequest.findMany({
-    where: { room: { propertyId } },
+    where: { room: { propertyId, deletedAt: null } },
     select: maintenanceRequestSelect,
     orderBy: { createdAt: "desc" },
   });

@@ -56,7 +56,14 @@ const tenancySelectWithTenant = {
 
 export const getMyTenancy = async (tenantId: string) => {
   const tenancy = await prisma.tenancy.findFirst({
-    where: { tenantId, status: "ACTIVE" },
+    where: {
+      tenantId,
+      status: "ACTIVE",
+      room: {
+        deletedAt: null,
+        property: { deletedAt: null },
+      },
+    },
     select: tenancySelect,
     orderBy: { createdAt: "desc" },
   });
@@ -86,7 +93,11 @@ export const listTenanciesByProperty = async (
   }
 
   const where: Prisma.TenancyWhereInput = {
-    room: { propertyId },
+    room: {
+      propertyId,
+      deletedAt: null,
+      property: { deletedAt: null },
+    },
     ...(query.status ? { status: query.status } : {}),
   };
 

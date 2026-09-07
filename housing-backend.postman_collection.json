@@ -1,0 +1,1133 @@
+{
+  "info": {
+    "_postman_id": "6f1d2e8a-3c4b-4a5e-9c0d-2f3a4b5c6d7e",
+    "name": "housing-backend",
+    "description": "Housing & Roommate Management Platform API.\n\nStandard response envelope:\n- Success: `{ \"success\": true, \"message\": string, \"data\": any }`\n- Error:   `{ \"success\": false, \"message\": string, \"errors\": any }`\n\nAuthentication: most endpoints require a Bearer token. Login (Auth > Login) automatically stores the access token in the collection variable `token`, which is injected into every request via the collection-level Bearer auth.\n\nRun the login request first (demo admin: `admin@housing.com` / `Password123!`), then fill the id variables (`userId`, `propertyId`, `roomId`, `tenancyId`, ...) from response data as needed.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api/v1", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "userId", "value": "", "type": "string" },
+    { "key": "propertyId", "value": "", "type": "string" },
+    { "key": "roomId", "value": "", "type": "string" },
+    { "key": "tenancyId", "value": "", "type": "string" },
+    { "key": "applicationId", "value": "", "type": "string" },
+    { "key": "viewingRequestId", "value": "", "type": "string" },
+    { "key": "rentPaymentId", "value": "", "type": "string" },
+    { "key": "billSplitId", "value": "", "type": "string" },
+    { "key": "maintenanceRequestId", "value": "", "type": "string" },
+    { "key": "paymentId", "value": "", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Liveness probe. Returns `{ success, message, data: { uptime, timestamp } }`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"password\": \"Password123!\",\n  \"name\": \"New Tenant\",\n  \"phone\": \"+1-555-0204\",\n  \"role\": \"TENANT\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Create an account. `role` is `TENANT` or `OWNER` (default TENANT). Returns the user plus access/refresh tokens."
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "execute": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.accessToken) {",
+                  "  pm.collectionVariables.set('token', json.data.accessToken);",
+                  "  console.log('Updated token from login response');",
+                  "}",
+                  "if (json && json.data && json.data.user && json.data.user.id) {",
+                  "  pm.collectionVariables.set('userId', json.data.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@housing.com\",\n  \"password\": \"Password123!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login and store the returned access token in the collection variable `token`. Demo accounts: `admin@housing.com`, `owner1@housing.com`, `tenant1@housing.com` (all password `Password123!`)."
+          }
+        },
+        {
+          "name": "Refresh token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"<refresh-token-or-use-httpOnly-cookie>\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh-token"]
+            },
+            "description": "Rotate the refresh token (also accepted via the `refreshToken` httpOnly cookie scoped to `/api/v1/auth`). Old token is revoked."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"<refresh-token-or-use-httpOnly-cookie>\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Revoke the current refresh token."
+          }
+        },
+        {
+          "name": "Google login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"<google-id-token>\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/google",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "google"]
+            },
+            "description": "Verify a Google ID token server-side and login/register."
+          }
+        },
+        {
+          "name": "Get current user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Return the authenticated user (from the Bearer token)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get my profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me"]
+            },
+            "description": "Full profile of the authenticated user including roommate preference."
+          }
+        },
+        {
+          "name": "Update profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Carol Tenant\",\n  \"phone\": \"+1-555-0201\",\n  \"avatarUrl\": \"https://example.com/avatar.jpg\",\n  \"bio\": \"Looking for a clean and quiet place.\",\n  \"roommatePreference\": {\n    \"minBudget\": 800,\n    \"maxBudget\": 1400,\n    \"preferredCity\": \"New York\",\n    \"preferredArea\": \"Manhattan\",\n    \"genderPreference\": \"ANY\",\n    \"lifestyleTags\": [\"non-smoker\", \"early-riser\", \"clean\"],\n    \"isSmoker\": false,\n    \"hasPets\": false,\n    \"moveInDate\": \"2026-10-01T00:00:00.000Z\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me"]
+            }
+          }
+        },
+        {
+          "name": "Change password",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"NewPassword123!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "change-password"]
+            },
+            "description": "Change the authenticated user's password (requires current password)."
+          }
+        },
+        {
+          "name": "Get user by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            },
+            "description": "Public profile of a user. `{{userId}}` is set automatically on login."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Properties",
+      "item": [
+        {
+          "name": "Create property",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Sunrise Apartments II\",\n  \"description\": \"Cozy apartment building with rooftop access and gym.\",\n  \"address\": \"246 Broadway\",\n  \"city\": \"New York\",\n  \"area\": \"Manhattan\",\n  \"state\": \"NY\",\n  \"zipCode\": \"10007\",\n  \"propertyType\": \"APARTMENT\",\n  \"amenities\": [\"Gym\", \"Elevator\", \"Laundry\"],\n  \"images\": [\"https://example.com/sunrise2-1.jpg\"],\n  \"status\": \"ACTIVE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/properties",
+              "host": ["{{baseUrl}}"],
+              "path": ["properties"]
+            },
+            "description": "Create a property (OWNER only). Sets `{{propertyId}}` to the new property id for chained requests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "execute": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('propertyId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List properties",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/properties?page=1&limit=20&sortBy=newest&city=New%20York&minRent=500&maxRent=2000&propertyType=APARTMENT&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["properties"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "sortBy", "value": "newest" },
+                { "key": "city", "value": "New York", "description": "Case-insensitive city match" },
+                { "key": "minRent", "value": "500" },
+                { "key": "maxRent", "value": "2000" },
+                { "key": "propertyType", "value": "APARTMENT" },
+                { "key": "search", "value": "", "description": "Matches title or address" }
+              ]
+            },
+            "description": "Public paginated list. Filters: `page`, `limit`, `city`, `minRent`, `maxRent`, `propertyType`, `search`, `sortBy` (`newest`/`oldest`/`price_asc`/`price_desc`). Items include `roomCount` and `minRent`. Cached in Redis (60s) with `X-Cache: HIT|MISS` header."
+          }
+        },
+        {
+          "name": "Get property details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/properties/{{propertyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["properties", "{{propertyId}}"]
+            },
+            "description": "Full property details including non-deleted rooms and owner."
+          }
+        },
+        {
+          "name": "Update property",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Sunrise Apartments (Renovated)\",\n  \"description\": \"Updated description\",\n  \"amenities\": [\"Gym\", \"Elevator\", \"Laundry\", \"Rooftop\", \"Pool\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/properties/{{propertyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["properties", "{{propertyId}}"]
+            },
+            "description": "Update own property (owner only). Invalidates the public list cache."
+          }
+        },
+        {
+          "name": "Delete property (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/properties/{{propertyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["properties", "{{propertyId}}"]
+            },
+            "description": "Soft-delete own property (`deletedAt` set). It disappears from all public endpoints."
+          }
+        },
+        {
+          "name": "My properties",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/properties/my-properties?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["properties", "my-properties"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "", "description": "Optional search" }
+              ]
+            },
+            "description": "Paginated list of the authenticated owner's own properties (OWNER only)."
+          }
+        },
+        {
+          "name": "Add room",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomType\": \"SINGLE\",\n  \"rentAmount\": 850,\n  \"isAvailable\": true,\n  \"capacity\": 1,\n  \"images\": [\"https://example.com/room1.jpg\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/properties/{{propertyId}}/rooms",
+              "host": ["{{baseUrl}}"],
+              "path": ["properties", "{{propertyId}}", "rooms"]
+            },
+            "description": "Add a room to the owner's own property. Sets `{{roomId}}` from the response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "execute": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('roomId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload property images",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "images", "type": "file", "src": ["/path/to/photo.jpg"], "description": "Field name must be `images`. Up to 10 files, each <= 5MB, image/* only." }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/properties/{{propertyId}}/images",
+              "host": ["{{baseUrl}}"],
+              "path": ["properties", "{{propertyId}}", "images"]
+            },
+            "description": "Multipart upload (Multer). Files are pushed to Cloudinary and their URLs appended to the property's `images` array. Requires `CLOUDINARY_*` env vars."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rooms",
+      "item": [
+        {
+          "name": "Update room",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomType\": \"DOUBLE\",\n  \"rentAmount\": 1200,\n  \"isAvailable\": true,\n  \"capacity\": 2\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rooms", "{{roomId}}"]
+            },
+            "description": "Update a room of the owner's own property (OWNER only)."
+          }
+        },
+        {
+          "name": "Delete room (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rooms/{{roomId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rooms", "{{roomId}}"]
+            },
+            "description": "Soft-delete a room of the owner's own property (OWNER only)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Viewing Requests",
+      "item": [
+        {
+          "name": "Create viewing request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomId\": \"{{roomId}}\",\n  \"requestedDate\": \"2026-10-05T10:00:00.000Z\",\n  \"notes\": \"Interested in a tour after 5pm.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/viewing-requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["viewing-requests"]
+            },
+            "description": "Request a viewing for a browsable room (TENANT). Duplicate pending request for the same room returns 409. Sets `{{viewingRequestId}}` from the response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "execute": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('viewingRequestId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "My viewing requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/viewing-requests/my-requests?page=1&limit=20&status=PENDING",
+              "host": ["{{baseUrl}}"],
+              "path": ["viewing-requests", "my-requests"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "PENDING", "description": "PENDING | APPROVED | REJECTED | COMPLETED | CANCELLED" }
+              ]
+            },
+            "description": "List own viewing requests (TENANT)."
+          }
+        },
+        {
+          "name": "Received viewing requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/viewing-requests/received?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["viewing-requests", "received"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "", "description": "Optional status filter" }
+              ]
+            },
+            "description": "List viewing requests for the owner's own properties (OWNER only)."
+          }
+        },
+        {
+          "name": "Update viewing status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPROVED\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/viewing-requests/{{viewingRequestId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["viewing-requests", "{{viewingRequestId}}", "status"]
+            },
+            "description": "Update status as the room's owner (OWNER only). Allowed transitions: PENDING -> APPROVED/REJECTED/CANCELLED; APPROVED -> COMPLETED/CANCELLED."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Applications",
+      "item": [
+        {
+          "name": "Apply for a room",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomId\": \"{{roomId}}\",\n  \"moveInDate\": \"2026-11-01T00:00:00.000Z\",\n  \"note\": \"Looking to move in on the 1st of November.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications"]
+            },
+            "description": "Apply for a browsable room (TENANT). Unavailable room or duplicate pending application returns 409. Sets `{{applicationId}}` from the response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "execute": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('applicationId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "My applications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/applications/my-applications?page=1&limit=20&status=",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications", "my-applications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "", "description": "PENDING | APPROVED | REJECTED | WITHDRAWN" }
+              ]
+            },
+            "description": "List own applications (TENANT)."
+          }
+        },
+        {
+          "name": "Approve application",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{applicationId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications", "{{applicationId}}", "approve"]
+            },
+            "description": "Approve as the room's owner. Atomically marks the room unavailable, rejects other pending applications for the room, and creates an ACTIVE tenancy. Audit log + notification (+ email). Sets `{{tenancyId}}` if a tenancy is in the response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "execute": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.tenancy && json.data.tenancy.id) {",
+                  "  pm.collectionVariables.set('tenancyId', json.data.tenancy.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject application",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{applicationId}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications", "{{applicationId}}", "reject"]
+            },
+            "description": "Reject as the room's owner. Writes audit log + notification (+ email)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tenancies",
+      "item": [
+        {
+          "name": "My active tenancy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tenancies/my-tenancy",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenancies", "my-tenancy"]
+            },
+            "description": "Current ACTIVE tenancy for the authenticated tenant (TENANT). 404 if none."
+          }
+        },
+        {
+          "name": "Tenancies by property",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tenancies/{{propertyId}}?page=1&limit=20&status=ACTIVE",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenancies", "{{propertyId}}"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "ACTIVE", "description": "ACTIVE | ENDED" }
+              ]
+            },
+            "description": "Paginated tenancies of the owner's own property (OWNER only)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rent Payments",
+      "item": [
+        {
+          "name": "List rent payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tenancies/{{tenancyId}}/rent-payments",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenancies", "{{tenancyId}}", "rent-payments"]
+            },
+            "description": "Rent payment history and upcoming dues for a tenancy (tenant of the tenancy or its property owner)."
+          }
+        },
+        {
+          "name": "Generate rent payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dueDate\": \"2026-11-01T00:00:00.000Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tenancies/{{tenancyId}}/rent-payments/generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["tenancies", "{{tenancyId}}", "rent-payments", "generate"]
+            },
+            "description": "Generate the next rent payment for a tenancy (OWNER of the property). One payment per period; duplicate for the same month returns 409. Sets `{{rentPaymentId}}` from the response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "execute": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('rentPaymentId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark rent payment paid",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rent-payments/{{rentPaymentId}}/mark-paid",
+              "host": ["{{baseUrl}}"],
+              "path": ["rent-payments", "{{rentPaymentId}}", "mark-paid"]
+            },
+            "description": "Mark a rent payment as PAID (idempotent; used for cash/offline payments)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bill Splits",
+      "item": [
+        {
+          "name": "Create bill split",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenancyId\": \"{{tenancyId}}\",\n  \"billType\": \"ELECTRICITY\",\n  \"totalAmount\": 300,\n  \"dueDate\": \"2026-10-20T00:00:00.000Z\",\n  \"ratio\": [1, 1]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/bill-splits",
+              "host": ["{{baseUrl}}"],
+              "path": ["bill-splits"]
+            },
+            "description": "Split a bill across the tenancy's roommates (OWNER or TENANT). Provide `ratio` (proportional) OR `shares` `[{ tenantId, amount }]`, not both. Sets `{{billSplitId}}` from the response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "execute": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('billSplitId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bill splits by tenancy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/bill-splits/tenancy/{{tenancyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["bill-splits", "tenancy", "{{tenancyId}}"]
+            },
+            "description": "List bill splits (with tenant shares) for a tenancy (tenant of the tenancy or its property owner)."
+          }
+        },
+        {
+          "name": "Settle my share",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/bill-splits/{{billSplitId}}/settle-share",
+              "host": ["{{baseUrl}}"],
+              "path": ["bill-splits", "{{billSplitId}}", "settle-share"]
+            },
+            "description": "Mark the authenticated tenant's share of a bill split as paid (TENANT only)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Maintenance",
+      "item": [
+        {
+          "name": "Create maintenance request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomId\": \"{{roomId}}\",\n  \"category\": \"Plumbing\",\n  \"description\": \"Leaking sink in the bathroom.\",\n  \"priority\": \"MEDIUM\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/maintenance-requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["maintenance-requests"]
+            },
+            "description": "Create a maintenance request for a room the tenant is renting (TENANT, requires active tenancy). Priority: LOW | MEDIUM | HIGH | URGENT. Sets `{{maintenanceRequestId}}` from the response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "execute": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('maintenanceRequestId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "My maintenance requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/maintenance-requests/my-requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["maintenance-requests", "my-requests"]
+            },
+            "description": "The tenant's own maintenance requests (TENANT)."
+          }
+        },
+        {
+          "name": "Property maintenance requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/maintenance-requests/property/{{propertyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["maintenance-requests", "property", "{{propertyId}}"]
+            },
+            "description": "Maintenance requests for the owner's own property (OWNER only)."
+          }
+        },
+        {
+          "name": "Update maintenance status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/maintenance-requests/{{maintenanceRequestId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["maintenance-requests", "{{maintenanceRequestId}}", "status"]
+            },
+            "description": "Update request status as the property owner (OWNER). OPEN -> IN_PROGRESS -> RESOLVED -> CLOSED. Notifies (+ emails) the tenant."
+          }
+        },
+        {
+          "name": "Upload maintenance images",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "images", "type": "file", "src": ["/path/to/issue.jpg"], "description": "Field name must be `images`." }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/maintenance-requests/{{maintenanceRequestId}}/images",
+              "host": ["{{baseUrl}}"],
+              "path": ["maintenance-requests", "{{maintenanceRequestId}}", "images"]
+            },
+            "description": "Add issue photos (TENANT or OWNER). Uploaded to Cloudinary and appended to the request's `images`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Initiate payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"RENT\",\n  \"referenceId\": \"{{rentPaymentId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/initiate",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "initiate"]
+            },
+            "description": "Start an SSLCommerz checkout (TENANT). `referenceId` is a RentPayment or BillSplit id depending on `type` (`RENT` | `BILL`). Returns a `gatewayPageURL` to redirect the browser to. Duplicate in-flight payment for the same reference returns 409."
+          }
+        },
+        {
+          "name": "Success callback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/success?val_id={{valId}}&tran_id={{paymentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "success"],
+              "query": [
+                { "key": "val_id", "value": "{{valId}}", "description": "SSLCommerz validation id from the gateway redirect" },
+                { "key": "tran_id", "value": "{{paymentId}}", "description": "The Payment id (tran_id)" }
+              ]
+            },
+            "description": "Browser redirect callback. The server re-validates `val_id` with the gateway and only finalizes the payment if VALID. Requires a `valId` collection variable."
+          }
+        },
+        {
+          "name": "Fail callback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/fail?tran_id={{paymentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "fail"],
+              "query": [
+                { "key": "tran_id", "value": "{{paymentId}}", "description": "The Payment id (tran_id)" }
+              ]
+            },
+            "description": "Browser redirect callback for failed payments. Marks the payment FAILED and unlinks the reference."
+          }
+        },
+        {
+          "name": "Cancel callback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/cancel?tran_id={{paymentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "cancel"],
+              "query": [
+                { "key": "tran_id", "value": "{{paymentId}}", "description": "The Payment id (tran_id)" }
+              ]
+            },
+            "description": "Browser redirect callback when the user cancels. Marks the payment FAILED (cancelled)."
+          }
+        },
+        {
+          "name": "Webhook (IPN)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tran_id\": \"{{paymentId}}\",\n  \"val_id\": \"{{valId}}\",\n  \"status\": \"VALID\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/payments/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "webhook"]
+            },
+            "description": "SSLCommerz server-to-server IPN listener (also accepts form-encoded). Re-validates `val_id` before finalizing. Idempotent."
+          }
+        },
+        {
+          "name": "My payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/my-payments?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "my-payments"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "Paginated payment history for the authenticated tenant (TENANT). Sets `{{paymentId}}` from the first item."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "execute": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.items && json.data.items.length > 0) {",
+                  "  pm.collectionVariables.set('paymentId', json.data.items[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get payment by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}"]
+            },
+            "description": "Payment status lookup (authed). The payer, the related property owner, or an admin can read it."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Dashboard stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/dashboard-stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "dashboard-stats"]
+            },
+            "description": "Aggregate platform counts/sums (ADMIN). Server-side Prisma groupBy/count/aggregate."
+          }
+        },
+        {
+          "name": "Audit logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/audit-logs?page=1&limit=20&entityType=&userId=&from=&to=",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "audit-logs"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "entityType", "value": "", "description": "e.g. Application, MaintenanceRequest, RentPayment, BillSplit" },
+                { "key": "userId", "value": "", "description": "Actor uuid" },
+                { "key": "from", "value": "", "description": "ISO datetime lower bound" },
+                { "key": "to", "value": "", "description": "ISO datetime upper bound" }
+              ]
+            },
+            "description": "Paginated audit log with filters (ADMIN)."
+          }
+        },
+        {
+          "name": "All payments (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/payments?page=1&limit=20&status=&gateway=&purpose=",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "payments"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "", "description": "PENDING | SUCCESS | FAILED" },
+                { "key": "gateway", "value": "", "description": "STRIPE | RAZORPAY | PAYPAL | CASH | SSLCOMMERZ | OTHER" },
+                { "key": "purpose", "value": "", "description": "RENT | BILL | DEPOSIT | OTHER" }
+              ]
+            },
+            "description": "All payments across the platform (ADMIN)."
+          }
+        },
+        {
+          "name": "Set property status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/properties/{{propertyId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "properties", "{{propertyId}}", "status"]
+            },
+            "description": "Activate/deactivate a listing (ADMIN). INACTIVE listings disappear from public endpoints. Invalidates the list cache."
+          }
+        },
+        {
+          "name": "List all users (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users?page=1&limit=20&role=&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "role", "value": "", "description": "TENANT | OWNER | ADMIN" },
+                { "key": "search", "value": "", "description": "Matches name, email or phone" }
+              ]
+            },
+            "description": "Paginated user list (ADMIN). Excludes soft-deleted users."
+          }
+        },
+        {
+          "name": "Suspend / activate user",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isSuspended\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/{{userId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", "{{userId}}", "status"]
+            },
+            "description": "Suspend or activate a user (ADMIN). Suspended users cannot use protected endpoints."
+          }
+        }
+      ]
+    }
+  ]
+}

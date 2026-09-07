@@ -92,6 +92,10 @@ export const listMyApplications = async (
 ) => {
   const where: Prisma.ApplicationWhereInput = {
     tenantId,
+    room: {
+      deletedAt: null,
+      property: { deletedAt: null },
+    },
     ...(query.status ? { status: query.status } : {}),
   };
 

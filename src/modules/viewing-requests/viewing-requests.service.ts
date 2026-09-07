@@ -89,6 +89,10 @@ export const listMyRequests = async (
 ) => {
   const where: Prisma.ViewingRequestWhereInput = {
     tenantId,
+    room: {
+      deletedAt: null,
+      property: { deletedAt: null },
+    },
     ...(query.status ? { status: query.status } : {}),
   };
 
@@ -120,7 +124,10 @@ export const listReceivedRequests = async (
   query: ListViewingRequestsQuery,
 ) => {
   const where: Prisma.ViewingRequestWhereInput = {
-    room: { property: { ownerId, deletedAt: null } },
+    room: {
+      deletedAt: null,
+      property: { ownerId, deletedAt: null },
+    },
     ...(query.status ? { status: query.status } : {}),
   };
 
