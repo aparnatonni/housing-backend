@@ -306,6 +306,8 @@ model RentPayment {
   dueDate   DateTime          @map("due_date")
   paidAt    DateTime?         @map("paid_at")
   status    RentPaymentStatus @default(PENDING)
+  paymentId String?           @map("payment_id")
+  payment   Payment?          @relation(fields: [paymentId], references: [id], onDelete: SetNull)
   createdAt DateTime          @default(now()) @map("created_at")
   updatedAt DateTime          @updatedAt @map("updated_at")
 
@@ -388,6 +390,8 @@ model Payment {
   metadata             Json?
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  rentPayments RentPayment[]
 
   @@index([userId, status])
   @@index([userId, createdAt])
