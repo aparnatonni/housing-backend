@@ -15,7 +15,10 @@ export const isUploadConfigured = (): boolean =>
       config.cloudinary.apiSecret,
   );
 
-export const uploadImage = async (buffer: Buffer): Promise<string> => {
+export const uploadImage = async (
+  buffer: Buffer,
+  folder = "property-images",
+): Promise<string> => {
   if (!isUploadConfigured()) {
     throw new AppError(
       "Image upload is not configured. Set CLOUDINARY_* environment variables.",
@@ -25,7 +28,7 @@ export const uploadImage = async (buffer: Buffer): Promise<string> => {
 
   return new Promise<string>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder: "property-images" },
+      { folder },
       (error, result) => {
         if (error) {
           reject(new AppError("Image upload failed", 502));

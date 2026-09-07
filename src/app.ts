@@ -9,6 +9,7 @@ import applicationsRouter from "./modules/applications/applications.routes";
 import authRouter from "./modules/auth/auth.routes";
 import billSplitsRouter from "./modules/bill-splits/bill-splits.routes";
 import healthRouter from "./modules/health/health.routes";
+import maintenanceRouter from "./modules/maintenance/maintenance.routes";
 import propertiesRouter from "./modules/properties/properties.routes";
 import rentPaymentsRouter from "./modules/rent-payments/rent-payments.routes";
 import roomsRouter from "./modules/rooms/rooms.routes";
@@ -50,6 +51,7 @@ apiRouter.use("/viewing-requests", viewingRequestsRouter);
 apiRouter.use("/applications", applicationsRouter);
 apiRouter.use("/tenancies", tenanciesRouter);
 apiRouter.use("/bill-splits", billSplitsRouter);
+apiRouter.use("/maintenance-requests", maintenanceRouter);
 apiRouter.use(rentPaymentsRouter);
 
 app.use("/api/v1", apiRouter);
