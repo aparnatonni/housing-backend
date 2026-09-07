@@ -198,6 +198,47 @@ Tenants pay rent and bill splits through SSLCommerz. A `Payment` row records eve
 - Finalization is idempotent: a repeated success/IPN callback returns the already-`SUCCESS` payment instead of double-flipping the reference.
 - Amounts are in BDT; `SSLCOMMERZ_IS_LIVE=false` routes to `https://sandbox.sslcommerz.com`.
 
+## Admin endpoints
+
+Platform-wide operations restricted to `ADMIN` role. All routes require `protect` + `authorize("ADMIN")` (a non-admin gets 403). Mounted at `/api/v1/admin`.
+
+| Method | Path                          | Description                                                                 |
+| ------ | ----------------------------- | --------------------------------------------------------------------------- |
+| GET    | `/dashboard-stats`            | Aggregate platform counts/sums (uses Prisma `groupBy`/`count`/`aggregate`, never loads full tables) |
+| GET    | `/audit-logs`                 | Paginated audit log (filters: `entityType`, `userId`, `from`, `to`)          |
+| PATCH  | `/properties/:id/status`      | Deactivate/activate a listing (`{ status: "ACTIVE" \| "INACTIVE" }`); INACTIVE listings disappear from public endpoints |
+| GET    | `/payments`                   | All payments paginated (filters: `status`, `gateway`, `purpose`)             |
+| GET    | `/users`                      | All users paginated (see users admin)                                       |
+| PATCH  | `/users/:id/status`           | Suspend/activate a user (see users admin)                                   |
+
+### Dashboard stats shape
+
+```jsonc
+{
+  "users":            { "total": 6, "byRole": { "TENANT": 3, "OWNER": 2, "ADMIN": 1 } },
+  "properties":       { "total": 3, "active": 3, "inactive": 0 },
+  "rooms":            { "total": 6, "available": 5 },
+  "tenancies":        { "total": 1, "active": 1 },
+  "applications":     { "pending": 1 },
+  "viewingRequests":  { "pending": 0 },
+  "maintenanceRequests": { "total": 1, "open": 1, "inProgress": 0, "closed": 0 },
+  "payments":         { "totalThisMonth": 2, "amountThisMonth": 2200,
+                        "successfulThisMonth": 2, "successfulAmountThisMonth": 2200,
+                        "totalSuccessful": 2, "totalSuccessfulAmount": 2200 },
+  "rentPayments":     { "pending": 1, "overdue": 0 },
+  "billSplits":       { "pending": 1 }
+}
+```
+
+`payments.amountThisMonth`/`successfulAmountThisMonth` are restricted to the current calendar month (UTC); the `*Successful*` values only count `SUCCESS` payments. All queries are server-side aggregations.
+
+### Audit log filters
+
+- `entityType` — exact string match (e.g. `Application`, `MaintenanceRequest`, `RentPayment`, `BillSplit`)
+- `userId` — uuid of the actor
+- `from` / `to` — ISO datetimes bounding `createdAt`
+- `page` / `limit` — pagination (default `1` / `20`, limit max 100)
+
 ## Commands
 
 ```bash
