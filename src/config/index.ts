@@ -38,6 +38,23 @@ const config = {
     apiKey: process.env.CLOUDINARY_API_KEY ?? "",
     apiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
   },
+  sslcommerz: {
+    storeId: process.env.SSLCOMMERZ_STORE_ID ?? "",
+    storePassword: process.env.SSLCOMMERZ_STORE_PASSWORD ?? "",
+    isLive: parseBoolean(process.env.SSLCOMMERZ_IS_LIVE),
+    successUrl:
+      process.env.SSLCOMMERZ_SUCCESS_URL ??
+      "http://localhost:5000/api/v1/payments/success",
+    failUrl:
+      process.env.SSLCOMMERZ_FAIL_URL ??
+      "http://localhost:5000/api/v1/payments/fail",
+    cancelUrl:
+      process.env.SSLCOMMERZ_CANCEL_URL ??
+      "http://localhost:5000/api/v1/payments/cancel",
+    ipnUrl:
+      process.env.SSLCOMMERZ_IPN_URL ??
+      "http://localhost:5000/api/v1/payments/webhook",
+  },
   isProduction: parseBoolean(process.env.IS_PRODUCTION),
 };
 

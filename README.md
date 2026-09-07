@@ -41,6 +41,13 @@ Server runs on `http://localhost:5000` (PORT from `.env`). All endpoints under `
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name (for property image uploads)             | —       |
 | `CLOUDINARY_API_KEY`    | Cloudinary API key                                             | —       |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret                                          | —       |
+| `SSLCOMMERZ_STORE_ID`   | SSLCommerz store id (sandbox or live)                          | —       |
+| `SSLCOMMERZ_STORE_PASSWORD` | SSLCommerz store password                                  | —       |
+| `SSLCOMMERZ_IS_LIVE`    | Use the live gateway (`true`) or sandbox (`false`)             | `false` |
+| `SSLCOMMERZ_SUCCESS_URL`| Browser callback after a successful payment                    | `http://localhost:5000/api/v1/payments/success` |
+| `SSLCOMMERZ_FAIL_URL`   | Browser callback after a failed payment                        | `http://localhost:5000/api/v1/payments/fail` |
+| `SSLCOMMERZ_CANCEL_URL` | Browser callback after the user cancels                        | `http://localhost:5000/api/v1/payments/cancel` |
+| `SSLCOMMERZ_IPN_URL`    | Server-to-server IPN listener for async notifications          | `http://localhost:5000/api/v1/payments/webhook` |
 | `CORS_ORIGIN`           | Allowed CORS origin                                            | `*`     |
 | `RATE_LIMIT_WINDOW_MS`  | Rate-limit window                                              | 15 min  |
 | `RATE_LIMIT_MAX`        | Max requests per window                                        | `100`   |
@@ -159,6 +166,37 @@ Workflow facts:
 - Applications: applying to an already-unavailable room or a second pending application for the same room → 409.
 - Approve is **race-safe**: the whole approve (claim the application, mark the room unavailable, auto-reject other pending applications for that room, create the ACTIVE tenancy, audit log + tenant notification) runs in a single interactive `$transaction` with a 30s timeout. Two concurrent approves of the same application yield exactly one 200 and one 409; a room made unavailable between apply and approve fails with 409 and leaves the application PENDING.
 - The interactive transaction must run on a real session connection — hence `DATABASE_URL` should be Neon's direct host, not the `-pooler` host.
+
+## Payments (SSLCommerz)
+
+Tenants pay rent and bill splits through SSLCommerz. A `Payment` row records every gateway attempt and is linked to the target `RentPayment` or `BillSplit` so the happy path can flip the target to `PAID` atomically.
+
+### Flow
+
+1. `POST /payments/initiate` with `{ type: "RENT" | "BILL", referenceId }` creates a `Payment` (`status = PENDING`, `gateway = SSLCOMMERZ`, currency `BDT`), links it to the reference, and calls the SSLCommerz session API.
+2. The response contains `gatewayPageURL`; the tenant is redirected there and pays on SSLCommerz's hosted page.
+3. SSLCommerz redirects the browser to `success_url` / `fail_url` / `cancel_url` (with `tran_id` = the `Payment` id) and also posts an async notification to `ipn_url`.
+4. The `success` and `webhook` handlers **never trust the client** — they call SSLCommerz's server-to-server validation API with `val_id`, and only a `VALID` / `VALIDATED` result proceeds.
+5. `finalizePaymentAfterVerification` runs in one interactive `$transaction`: claim the `Payment` from `PENDING → SUCCESS`, store `gatewayTransactionId` (`val_id`) + the raw gateway response in `payment.metadata.sslcommerz`, then flip the linked `RentPayment` / `BillSplit` (and the tenant's `BillSplitTenant` share) to `PAID`, and write an audit log + notification.
+
+### Endpoints (`/api/v1/payments`)
+
+| Method | Path          | Auth      | Description                                            |
+| ------ | ------------- | --------- | ------------------------------------------------------ |
+| POST   | `/initiate`   | `TENANT`  | Create a PENDING payment and get the SSLCommerz checkout URL. Duplicate in-flight payment for the same reference → 409 |
+| GET/POST | `/success` | public    | Browser/redirect callback; validates with the gateway and finalizes the payment |
+| GET/POST | `/fail`    | public    | Redirect callback; marks the payment `FAILED` and unlinks the reference |
+| GET/POST | `/cancel`  | public    | Redirect callback; marks the payment `FAILED` (cancelled) |
+| POST   | `/webhook`    | public    | SSLCommerz IPN listener (form post). Re-validates `val_id`, then finalizes/fails |
+| GET    | `/my-payments`| `TENANT`  | Paginated payment history (`?page=&limit=`)             |
+| GET    | `/:id`        | `protect` | Payment status lookup (payer, related property owner, or admin) |
+
+### Security notes
+
+- `success` requires a valid `val_id` and a successful `VALID` server-side validation before anything is marked paid — a bogus/expired `val_id` yields a 400/502 and the payment stays `PENDING` (or is marked `FAILED` when the gateway reports a failed status).
+- `tran_id` is the server-generated `Payment` id, and the gateway's reported amount is compared against the `Payment.amount` to prevent tampering.
+- Finalization is idempotent: a repeated success/IPN callback returns the already-`SUCCESS` payment instead of double-flipping the reference.
+- Amounts are in BDT; `SSLCOMMERZ_IS_LIVE=false` routes to `https://sandbox.sslcommerz.com`.
 
 ## Commands
 
