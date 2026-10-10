@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { User } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { OAuth2Client, type TokenPayload } from "google-auth-library";
@@ -40,9 +40,9 @@ export const signAccessToken = (userId: string, role: User["role"]): string =>
     signOptions(config.jwt.accessExpiresIn),
   );
 
-export const signRefreshToken = (userId: string): string =>
+export const signRefreshToken = (userId: string, jti?: string): string =>
   jwt.sign(
-    { sub: userId },
+    { sub: userId, jti: jti ?? randomUUID() },
     config.jwt.refreshSecret,
     signOptions(config.jwt.refreshExpiresIn),
   );
@@ -52,14 +52,32 @@ export const refreshCookieMaxAge = (): number =>
 
 export const generateTokenPair = async (user: User) => {
   const accessToken = signAccessToken(user.id, user.role);
-  const refreshToken = signRefreshToken(user.id);
-  await prisma.refreshToken.create({
-    data: {
-      userId: user.id,
-      tokenHash: hashToken(refreshToken),
-      expiresAt: new Date(Date.now() + refreshCookieMaxAge()),
-    },
-  });
+  const jti = randomUUID();
+  const refreshToken = signRefreshToken(user.id, jti);
+
+  const expiresAt = new Date(Date.now() + refreshCookieMaxAge());
+  try {
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashToken(refreshToken),
+        expiresAt,
+      },
+    });
+  } catch (error) {
+    // Retry once with a new token if we hit a unique constraint (e.g. same-second collision)
+    const retryJti = randomUUID();
+    const retryRefreshToken = signRefreshToken(user.id, retryJti);
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashToken(retryRefreshToken),
+        expiresAt,
+      },
+    });
+    return { accessToken, refreshToken: retryRefreshToken };
+  }
+
   return { accessToken, refreshToken };
 };
 

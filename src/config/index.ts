@@ -13,12 +13,30 @@ const parseBoolean = (value: string | undefined, fallback = false): boolean => {
   return ["true", "1", "yes"].includes(value.toLowerCase());
 };
 
+const parseCorsOrigin = (value: string | undefined): string | string[] => {
+  if (!value) {
+    return ["http://localhost:3000", "https://housing-frontend-jet.vercel.app"];
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return ["http://localhost:3000", "https://housing-frontend-jet.vercel.app"];
+  }
+  const origins = trimmed
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  if (origins.length === 0) {
+    return ["http://localhost:3000", "https://housing-frontend-jet.vercel.app"];
+  }
+  return origins;
+};
+
 const config = {
   env: process.env.NODE_ENV ?? "development",
   port: parsePort(process.env.PORT),
   databaseUrl: process.env.DATABASE_URL ?? "",
   cors: {
-    origin: process.env.CORS_ORIGIN ?? "*",
+    origin: parseCorsOrigin(process.env.CORS_ORIGIN),
   },
   rateLimit: {
     windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000),
